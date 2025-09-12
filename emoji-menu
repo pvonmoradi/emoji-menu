@@ -1,0 +1,129 @@
+#!/bin/sh
+# Author: Pooya Moradi
+# Date : 2021-07-01
+# License: MIT
+#
+# Description: A dmenu-driven emoji selector
+# Dependencies: curl jq notify-send xclip
+#               dmenu (and Symbola font) or fzf
+#
+# References: https://www.npmjs.com/package/emoji.json
+# TODO Find a complete Japanese emoticon json db
+# https://github.com/towzeur/Japanese-Emoticons-json/blob/master/Japanese_Emoticons.json
+# https://gist.github.com/jordanorelli/11229304/raw/a68eb7dcaf5ba5fad83dfccea3af4c152b906232/gistfile1.txt
+
+version=0.8
+selector="dmenu -i -l 4 -p emoji:"
+# selector="dmenu -fn Symbola -i -p emoji:"
+# selector="fzf --prompt emoji:"
+
+user_data_dir="${XDG_DATA_HOME:-$HOME/.local/share}"
+script_data_dir="$user_data_dir/emoji-menu"
+[ ! -d "$script_data_dir" ] && mkdir "$script_data_dir"
+
+emoji_db_link="https://unpkg.com/emoji.json/emoji.json"
+emoji_db="$script_data_dir/emoji.json"
+
+kaomoji_db_link="https://github.com/duckduckgo/zeroclickinfo-goodies/raw/master/share/goodie/cheat_sheets/json/kaomoji.json"
+kaomoji_db="$script_data_dir/kaomoji.json"
+
+show_help() {
+    printf >&1 "%s\n" "Usage: emoji-menu {emoji|kaomoji|sync|version|help}"
+}
+
+sync() {
+    db_file="$1"
+    db_link="$2"
+    if ! curl -# --fail --location --output "$db_file" "$db_link"; then
+        msg=$(printf "Error. Unable to download %s" "$db_link")
+        notify-send "emoji-menu" "$msg"
+        printf >&2 "%s : %s\n" "emoji-menu" "$msg"
+        return 1
+    else
+        msg=$(printf "Download successful.\n%s" "$(realpath "$db_file")")
+        notify-send "emoji-menu" "$msg"
+        printf >&2 "%s : %s\n" "emoji-menu" "$msg"
+        return 0
+    fi
+}
+
+cmd="$1"
+case "$cmd" in
+    "emoji" | "")
+        [ ! -f "$emoji_db" ] && {
+            msg=$(printf \
+                "Error. No database found!\n%s not found! Sync first." \
+                "$emoji_db")
+            notify-send "emoji-menu" "$msg"
+            printf >&2 "%s : %s\n" "emoji-menu" "$msg"
+            exit 1
+        }
+        q=$(jq --raw-output '.[] | .name + " " + .char' \
+            "$emoji_db" | $selector)
+        # extracting only the selected emoji (.char) (last word from a
+        # space-seperated presentation string)
+        q="${q##* }"
+        [ -z "$q" ] && exit 1
+        emoji_entry=$(jq --raw-output --arg q "$q" \
+            '.[] | select(.char == $q)' "$emoji_db")
+        emoji=$(printf "%s" "$emoji_entry" \
+            | jq --raw-output '.char | select (. != null)')
+        [ -z "$emoji" ] && exit 1
+        printf "%s\n" "$emoji_entry"
+        printf "%s" "$emoji" | xclip -selection primary
+        notify-send "emoji-menu" "$emoji copied to X primary!"
+        exit 0
+        ;;
+    "kaomoji")
+        [ ! -f "$kaomoji_db" ] && {
+            msg=$(printf \
+                "Error. No database found!\n%s not found! Sync first." \
+                "$kaomoji_db")
+            notify-send "emoji-menu" "$msg"
+            printf >&2 "%s : %s\n" "emoji-menu" "$msg"
+            exit 1
+        }
+        q=$(jq --raw-output '[.. | select(.key?)] | .[] | .val + "  " + .key' \
+            "$kaomoji_db" | $selector)
+        [ -z "$q" ] && exit 1
+        kaomoji_entry=$(jq --raw-output --arg q "$q" \
+            '[[.. | select(.key?)] | .[]
+                    | select((.val | inside($q)) and (.key | inside($q)))]
+                    | first' \
+            "$kaomoji_db")
+        kaomoji=$(printf "%s" "$kaomoji_entry" \
+            | jq --raw-output '.key | select(. != null)')
+        [ -z "$kaomoji" ] && exit 1
+        printf "%s\n" "$kaomoji_entry"
+        printf "%s" "$kaomoji" | xclip -selection primary
+        notify-send "emoji-menu" "$kaomoji \ncopied to X primary!"
+        exit 0
+        ;;
+    "sync")
+        if sync "$emoji_db" "$emoji_db_link" \
+            && sync "$kaomoji_db" "$kaomoji_db_link"; then
+            msg=$(printf "Sync successful!\n")
+            notify-send "emoji-menu" "$msg"
+            printf >&2 "%s : %s\n" "emoji-menu" "$msg"
+            exit 0
+        else
+            msg=$(printf "Sync failed!\n")
+            notify-send "emoji-menu" "$msg"
+            printf >&2 "%s : %s\n" "emoji-menu" "$msg"
+            exit 1
+        fi
+        ;;
+    "version" | "-V" | "--version")
+        printf "%s\n" "$version"
+        exit 0
+        ;;
+    "help" | "-h" | "--help")
+        show_help
+        exit 0
+        ;;
+    *)
+        printf >&2 "Bad usage!\n"
+        show_help
+        exit 2
+        ;;
+esac
