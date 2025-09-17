@@ -12,9 +12,9 @@
 # https://github.com/towzeur/Japanese-Emoticons-json/blob/master/Japanese_Emoticons.json
 # https://gist.github.com/jordanorelli/11229304/raw/a68eb7dcaf5ba5fad83dfccea3af4c152b906232/gistfile1.txt
 
-version=0.8
+version=0.9
 selector="dmenu -i -l 4 -p emoji:"
-# selector="dmenu -fn Symbola -i -p emoji:"
+selector2="dmenu -fn Symbola -l 4 -i -p kaomoji:"
 # selector="fzf --prompt emoji:"
 
 user_data_dir="${XDG_DATA_HOME:-$HOME/.local/share}"
@@ -84,7 +84,7 @@ case "$cmd" in
             exit 1
         }
         q=$(jq --raw-output '[.. | select(.key?)] | .[] | .val + "  " + .key' \
-            "$kaomoji_db" | $selector)
+            "$kaomoji_db" | $selector2)
         [ -z "$q" ] && exit 1
         kaomoji_entry=$(jq --raw-output --arg q "$q" \
             '[[.. | select(.key?)] | .[]

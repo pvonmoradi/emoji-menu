@@ -15,7 +15,7 @@ files. dmenu is used for selection. The selected item is copied into X primary
 clipboard (middle-mouse button to paste).
 
 ## 📦 Dependencies
-- `curl jq notify-send xclip dmenu`
+- `curl jq notify-send xclip dmenu fonts-symbola`
 
 ## 💾 Databases
 - emoji:   https://unpkg.com/emoji.json/emoji.json
